@@ -1,0 +1,28 @@
+kind = "web"
+previewPath = "/"
+title = "Mesa Viva"
+description = "Gerenciador de fichas de D&D 5e em português para criar personagens, ajustar atributos e acompanhar combate e progressão de nível durante a mesa."
+version = "1.0.0"
+id = "artifacts/mesa-viva"
+router = "path"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 20501
+
+[services.development]
+run = "pnpm --filter @workspace/mesa-viva run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/mesa-viva", "run", "build" ]
+serve = "static"
+publicDir = "artifacts/mesa-viva/dist/public"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "20501"
+BASE_PATH = "/"
