@@ -7,6 +7,13 @@ export type Spell = {
   uses: number;
 };
 
+export type CharacterFeature = {
+  name: string;
+  category: 'Classe' | 'Subclasse' | 'Ancestralidade' | 'Antecedente';
+  description: string;
+  resource?: 'kiPoints' | 'sorceryPoints';
+};
+
 export type Character = {
   id: string;
   name: string;
@@ -28,7 +35,8 @@ export type Character = {
   armorWis?: boolean;
   skills: string[];
   savingThrows: Ability[];
-  passives: string[];
+  features: CharacterFeature[];
+  resources: { kiPoints: number; sorceryPoints: number };
   color: string;
   slots: number[];
   usedSlots: number[];
@@ -43,6 +51,13 @@ const spell = (name: string, level: number, description: string): Spell => ({
   description,
   uses: 0,
 });
+
+const feature = (
+  category: CharacterFeature['category'],
+  name: string,
+  description: string,
+  resource?: CharacterFeature['resource'],
+): CharacterFeature => ({ category, name, description, ...(resource ? { resource } : {}) });
 
 export const abilityKeys: Ability[] = ['for', 'des', 'con', 'int', 'sab', 'car'];
 
@@ -112,12 +127,21 @@ export const starters: Character[] = [
       'Prestidigitação',
     ],
     savingThrows: ['des', 'int'],
-    passives: [
-      'Ladino: Perícia, Ataque Furtivo (1d6), Gíria de Ladrão e Ação Ardilosa.',
-      'Subclasse: Alma Laminada.',
-      'Tabaxi: Visão no Escuro (18 m), Agilidade Felina (dobra o deslocamento uma vez por turno), Garras de Gato (1d4 cortante e escalada de 6 m) e sentidos apurados.',
-      'Órfão — Segredos da Cidade: conhece caminhos escondidos e se move duas vezes mais rápido em ambientes urbanos.',
+    features: [
+      feature('Classe', 'Perícia', 'Escolha duas perícias ou ferramentas em que já seja proficiente; seu bônus de proficiência é dobrado nelas.'),
+      feature('Classe', 'Ataque Furtivo (1d6)', 'Uma vez por turno, causa 1d6 extra ao acertar com arma de acuidade ou à distância quando tem vantagem, ou quando um aliado ameaça o alvo e você não tem desvantagem.'),
+      feature('Classe', 'Gíria de Ladrão', 'Conhece uma mistura secreta de dialeto, códigos e sinais usada para transmitir mensagens sem que outras pessoas entendam.'),
+      feature('Classe', 'Ação Ardilosa', 'No seu turno, pode usar uma ação bônus para Correr, Desengajar ou Esconder-se.'),
+      feature('Subclasse', 'Poder Psíquico', 'Usa energia psíquica para apoiar proezas da Alma Laminada; os dados de energia retornam após descanso longo e um deles pode ser recuperado em descanso curto.'),
+      feature('Subclasse', 'Lâminas Psíquicas', 'Manifesta lâminas de energia psíquica para realizar ataques corpo a corpo ou à distância, sem precisar sacar uma arma física.'),
+      feature('Subclasse', 'Sussurros Psíquicos', 'Forma um elo telepático com criaturas escolhidas para trocar mensagens mentalmente por um período limitado.'),
+      feature('Ancestralidade', 'Visão no Escuro', 'Enxerga na penumbra a até 18 m como se fosse luz plena e na escuridão como se fosse penumbra.'),
+      feature('Ancestralidade', 'Agilidade Felina', 'Quando se move no seu turno, pode dobrar o deslocamento até o fim do turno; precisa passar um turno sem se mover para usar de novo.'),
+      feature('Ancestralidade', 'Garras de Gato', 'Tem garras naturais que causam 1d4 de dano cortante e permitem escalar com deslocamento de escalada de 6 m.'),
+      feature('Ancestralidade', 'Sentidos Apurados', 'A ficha registra sentidos treinados, com proficiência em Percepção e Furtividade.'),
+      feature('Antecedente', 'Segredos da Cidade', 'Conhece atalhos e passagens escondidas nos centros urbanos; circula pela cidade com o dobro do deslocamento normal.'),
     ],
+    resources: { kiPoints: 0, sorceryPoints: 0 },
     color: 'coral',
     slots: [],
     usedSlots: [],
@@ -143,12 +167,19 @@ export const starters: Character[] = [
     armorDex: true,
     skills: ['Enganação', 'Intimidação', 'Persuasão'],
     savingThrows: ['con', 'car'],
-    passives: [
-      'Feiticeiro: Origem Feiticeira, Conjuração, Fonte de Magia e Metamagia.',
-      'Subclasse: Magia Selvagem.',
-      'Meio-elfo: visão no escuro (18 m), Ancestral Feérico, Versatilidade em Perícia e os aumentos de atributo anotados na ficha.',
-      'Charlatão — Identidade Falsa: mantém uma segunda identidade com documentação, relações e disfarce.',
+    features: [
+      feature('Classe', 'Conjuração', 'Lança magias usando Carisma. Conhece os truques e magias indicados nesta ficha e recupera espaços de magia após descanso longo.'),
+      feature('Classe', 'Fonte de Magia', 'Converte espaços de magia em pontos de feitiçaria ou pontos em espaços de magia conforme as regras da classe.', 'sorceryPoints'),
+      feature('Classe', 'Metamagia', 'Gasta pontos de feitiçaria para modificar a forma de conjurar uma magia; as opções escolhidas ficam a cargo da mesa.'),
+      feature('Subclasse', 'Surto de Magia Selvagem', 'Depois de conjurar uma magia de feiticeiro, o mestre pode pedir uma rolagem para provocar um efeito mágico imprevisível.'),
+      feature('Subclasse', 'Marés do Caos', 'Uma vez antes de um descanso longo, pode ganhar vantagem em um teste de ataque, habilidade ou resistência; o mestre pode então provocar um surto selvagem.'),
+      feature('Ancestralidade', 'Aumento de Atributos', 'Recebe os aumentos de atributo de meio-elfo anotados na ficha.'),
+      feature('Ancestralidade', 'Visão no Escuro', 'Enxerga na penumbra a até 18 m como se fosse luz plena e na escuridão como se fosse penumbra.'),
+      feature('Ancestralidade', 'Ancestral Feérico', 'Tem vantagem em testes de resistência contra ser enfeitiçado; magia não pode colocá-lo para dormir.'),
+      feature('Ancestralidade', 'Versatilidade em Perícia', 'Ganha proficiência em duas perícias à escolha; as proficiências marcadas aparecem na seção Perícias.'),
+      feature('Antecedente', 'Identidade Falsa', 'Mantém uma identidade alternativa com documentação, contatos e disfarce para se apresentar como outra pessoa.'),
     ],
+    resources: { kiPoints: 0, sorceryPoints: 3 },
     color: 'lilac',
     slots: [4, 2],
     usedSlots: [4, 2],
@@ -184,12 +215,24 @@ export const starters: Character[] = [
     armorDex: false,
     skills: ['Atletismo', 'Intuição', 'Medicina', 'Percepção'],
     savingThrows: ['sab', 'car'],
-    passives: [
-      'Clérigo: Conjuração, Domínio Divino e Canalizar Divindade.',
-      'Subclasse: Domínio do Crepúsculo.',
-      'Alto-elfo: visão no escuro (18 m), Sentidos Aguçados, Ancestral Feérico, Transe, Treinamento com Armas Élficas, truque de mago e um idioma adicional.',
-      'Soldado — Posto Militar: soldados leais ao antigo posto reconhecem sua autoridade.',
+    features: [
+      feature('Classe', 'Conjuração', 'Lança magias usando Sabedoria. As magias conhecidas e preparadas aparecem na seção Magias.'),
+      feature('Classe', 'Domínio Divino', 'O domínio concede magias e características temáticas; as magias de domínio ficam sempre preparadas.'),
+      feature('Classe', 'Canalizar Divindade', 'Conduz energia divina por meio de um efeito de classe ou domínio; a quantidade de usos cresce com o nível.'),
+      feature('Subclasse', 'Proficiências Bônus', 'O Domínio do Crepúsculo concede treinamento com armas e armaduras adicionais conforme a escolha registrada.'),
+      feature('Subclasse', 'Olhos da Noite', 'Enxerga na escuridão a até 90 m; também pode compartilhar essa visão com aliados por um período limitado.'),
+      feature('Subclasse', 'Bênção Vigilante', 'Com uma ação, concede vantagem no próximo teste de iniciativa de uma criatura.'),
+      feature('Subclasse', 'Santuário do Crepúsculo', 'Canaliza Divindade para criar uma esfera protetora que concede vigor temporário ou encerra medo e encantamento em aliados.'),
+      feature('Ancestralidade', 'Visão no Escuro', 'Enxerga na penumbra a até 18 m como se fosse luz plena e na escuridão como se fosse penumbra.'),
+      feature('Ancestralidade', 'Sentidos Aguçados', 'Tem proficiência em Percepção, conforme a ficha.'),
+      feature('Ancestralidade', 'Ancestral Feérico', 'Tem vantagem em testes de resistência contra ser enfeitiçado; magia não pode colocá-lo para dormir.'),
+      feature('Ancestralidade', 'Transe', 'Não precisa dormir; medita profundamente por quatro horas para obter o benefício de um descanso longo.'),
+      feature('Ancestralidade', 'Treinamento com Armas Élficas', 'Tem treinamento com armas élficas tradicionais.'),
+      feature('Ancestralidade', 'Truque de Alto-Elfo', 'Conhece um truque da lista de magias de mago, escolhido conforme anotado na ficha.'),
+      feature('Ancestralidade', 'Idioma Adicional', 'Pode falar, ler e escrever um idioma adicional.'),
+      feature('Antecedente', 'Posto Militar', 'Soldados leais ao seu antigo posto reconhecem sua autoridade e influência militar.'),
     ],
+    resources: { kiPoints: 0, sorceryPoints: 0 },
     color: 'gold',
     slots: [4, 2],
     usedSlots: [4, 2],
@@ -226,12 +269,20 @@ export const starters: Character[] = [
     armorDex: true,
     skills: ['Atletismo', 'Enganação', 'Intimidação', 'Sobrevivência'],
     savingThrows: ['sab', 'car'],
-    passives: [
-      'Bruxo: Patrono Supremo, Conjuração Pactual, Invocações Místicas e Dádiva do Pacto.',
-      'Subclasse: A Lâmina Maldita.',
-      'Aasimar Flagelo: visão no escuro (18 m), resistência a dano necrótico e radiante, Mãos Curativas, truque Luz e Consumo Radiante (1 vez por dia).',
-      'Forasteiro — Errante: excelente memória geográfica; encontra comida e água para até seis pessoas na natureza.',
+    features: [
+      feature('Classe', 'Magia Pactual', 'Conjura magias usando Carisma. Seus espaços são todos do mesmo círculo, retornam após descanso curto ou longo e são gastos para conjurar magias de nível igual ou menor.'),
+      feature('Classe', 'Invocações Místicas', 'Escolhe invocações que concedem capacidades mágicas ou sobrenaturais permanentes.'),
+      feature('Classe', 'Dádiva do Pacto', 'Recebe um benefício especial de pacto; a dádiva escolhida na ficha define a forma desse recurso.'),
+      feature('Subclasse', 'Maldição da Lâmina Maldita', 'Amaldiçoa um alvo para aumentar o dano contra ele, ampliar a chance de acerto crítico e recuperar vida se ele morrer.'),
+      feature('Subclasse', 'Guerreiro Hex', 'Usa Carisma nos ataques e dano com a arma de pacto escolhida e ganha treinamento com armaduras e armas adequadas.'),
+      feature('Ancestralidade', 'Visão no Escuro', 'Enxerga na penumbra a até 18 m como se fosse luz plena e na escuridão como se fosse penumbra.'),
+      feature('Ancestralidade', 'Resistência Celestial', 'Tem resistência a dano necrótico e radiante.'),
+      feature('Ancestralidade', 'Mãos Curativas', 'Com um toque, restaura pontos de vida uma vez por descanso longo.'),
+      feature('Ancestralidade', 'Luz', 'Conhece o truque Luz, que ilumina um objeto tocado.'),
+      feature('Ancestralidade', 'Consumo Radiante', 'Libera energia luminosa ao redor de si; causa dano radiante próximo e a si mesmo, uma vez por descanso longo.'),
+      feature('Antecedente', 'Errante', 'Tem memória geográfica excelente e encontra comida e água para si e até cinco outras pessoas em regiões naturais.'),
     ],
+    resources: { kiPoints: 0, sorceryPoints: 0 },
     color: 'jade',
     slots: [0, 2],
     usedSlots: [0, 2],
@@ -266,12 +317,20 @@ export const starters: Character[] = [
     armorWis: true,
     skills: ['Acrobacia', 'Atletismo', 'Adestrar Animais', 'Sobrevivência'],
     savingThrows: ['for', 'des'],
-    passives: [
-      'Monge: Defesa sem Armadura, Artes Marciais, Ki e Movimento sem Armadura.',
-      'Subclasse: Caminho do Mestre Embriagado.',
-      'Halfling Robusto: Sortudo (pode rerrolar 1 natural), Bravura, Agilidade Halfling e vantagem contra veneno.',
-      'Herói do Povo — Hospitalidade Rústica: pessoas comuns oferecem abrigo e esconderijo.',
+    features: [
+      feature('Classe', 'Defesa sem Armadura', 'Sem armadura nem escudo, sua CA é 10 + modificador de Destreza + modificador de Sabedoria.'),
+      feature('Classe', 'Artes Marciais', 'Sem armadura ou escudo, pode usar Destreza em ataques desarmados e armas de monge; seus golpes desarmados causam 1d4.'),
+      feature('Classe', 'Ki', 'Tem 3 pontos de ki no nível atual. Pode gastar ki para Rajada de Golpes, Defesa Paciente ou Passo do Vento; recupera tudo em descanso curto ou longo.', 'kiPoints'),
+      feature('Classe', 'Movimento sem Armadura', 'Seu deslocamento aumenta em 3 m enquanto não usa armadura nem escudo.'),
+      feature('Subclasse', 'Técnica do Mestre Embriagado', 'Após usar Rajada de Golpes, pode se Desengajar e ganhar 3 m de deslocamento até o fim do turno.'),
+      feature('Subclasse', 'Proficiência em Suprimentos de Cervejeiro', 'Ganha proficiência em suprimentos de cervejeiro e em Atuação, conforme os benefícios do caminho.'),
+      feature('Ancestralidade', 'Sortudo', 'Quando tira 1 natural em uma jogada de ataque, teste de habilidade ou resistência, pode rolar o dado novamente.'),
+      feature('Ancestralidade', 'Bravura', 'Tem vantagem em testes de resistência para evitar ou encerrar a condição amedrontado.'),
+      feature('Ancestralidade', 'Agilidade Halfling', 'Pode atravessar o espaço de criaturas maiores que você.'),
+      feature('Ancestralidade', 'Resiliência Robusta', 'Tem vantagem em testes de resistência contra veneno e resistência a dano venenoso.'),
+      feature('Antecedente', 'Hospitalidade Rústica', 'Pessoas comuns podem oferecer abrigo e esconderijo, embora não arrisquem a própria segurança.'),
     ],
+    resources: { kiPoints: 3, sorceryPoints: 0 },
     color: 'blue',
     slots: [],
     usedSlots: [],
@@ -297,12 +356,19 @@ export const starters: Character[] = [
     armorDex: true,
     skills: ['Acrobacia', 'Atuação', 'Enganação', 'Furtividade', 'Persuasão'],
     savingThrows: ['des', 'car'],
-    passives: [
-      'Bardo: Conjuração, Inspiração Bárdica (d6), Talento para Tudo e Canção do Descanso.',
-      'Subclasse: Colégio da Criação.',
-      'Tiefling: visão no escuro (18 m), Resistência Infernal a fogo e Legado Infernal.',
-      'Artista — Pela Demanda Popular: pode atuar em estabelecimentos em troca de alojamento e refeições modestos.',
+    features: [
+      feature('Classe', 'Conjuração', 'Lança magias usando Carisma; consulte a seção Magias para ver os truques e espaços da ficha.'),
+      feature('Classe', 'Inspiração Bárdica (d6)', 'Como ação bônus, concede a uma criatura um dado d6 para somar a um teste de habilidade, ataque ou resistência; recupera os usos em descanso longo.'),
+      feature('Classe', 'Talento para Tudo', 'Soma metade do bônus de proficiência, arredondada para baixo, a testes de habilidade que ainda não incluam proficiência.'),
+      feature('Classe', 'Canção do Descanso (d6)', 'Durante um descanso curto, aliados que gastam Dados de Vida recuperam 1d6 PV adicionais se puderem ouvir sua atuação.'),
+      feature('Subclasse', 'Mote de Potencial', 'A Inspiração Bárdica ganha um efeito extra, determinado pelo uso: proteção, dano ou melhoria de um teste.'),
+      feature('Subclasse', 'Atuação da Criação', 'Cria temporariamente um objeto não mágico de tamanho e valor limitados, sujeito aos usos e limites da característica.'),
+      feature('Ancestralidade', 'Visão no Escuro', 'Enxerga na penumbra a até 18 m como se fosse luz plena e na escuridão como se fosse penumbra.'),
+      feature('Ancestralidade', 'Resistência Infernal', 'Tem resistência a dano de fogo.'),
+      feature('Ancestralidade', 'Legado Infernal', 'Recebe magias raciais ligadas à herança infernal, conforme a ficha e o nível.'),
+      feature('Antecedente', 'Pela Demanda Popular', 'Consegue atuar em estabelecimentos para obter alojamento e refeições modestos, desde que se apresente.'),
     ],
+    resources: { kiPoints: 0, sorceryPoints: 0 },
     color: 'plum',
     slots: [4, 2],
     usedSlots: [4, 2],

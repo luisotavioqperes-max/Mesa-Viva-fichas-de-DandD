@@ -23,6 +23,10 @@ const mod = (n: number) => Math.floor((n - 10) / 2);
 const signed = (n: number) => n >= 0 ? `+${n}` : `${n}`;
 const profFor = (level: number) => Math.floor((level - 1) / 4) + 2;
 const hpForLevel = (c: Character, level: number) => c.hitDie + mod(c.abilities.con) + Math.max(0, level - 1) * (Math.floor(c.hitDie / 2) + 1 + mod(c.abilities.con));
+const resourceMaximum = (className: string, level: number, resource: 'kiPoints' | 'sorceryPoints') => {
+  const expectedClass = resource === 'kiPoints' ? 'Monge' : 'Feiticeiro';
+  return className === expectedClass && level >= 2 ? level : 0;
+};
 const slotsFor = (className: string, level: number): number[] => {
   if (className === 'Bruxo') {
     const pactSlotLevel = level >= 17 ? 5 : level >= 11 ? 5 : level >= 9 ? 5 : level >= 7 ? 4 : level >= 5 ? 3 : level >= 3 ? 2 : 1;
@@ -88,7 +92,8 @@ function normalizeCharacter(value: unknown): Character {
     abilities: { ...base.abilities, ...(raw.abilities ?? {}) },
     skills: Array.isArray(raw.skills) ? raw.skills : base.skills,
     savingThrows: Array.isArray(raw.savingThrows) ? raw.savingThrows : base.savingThrows,
-    passives: Array.isArray(raw.passives) ? raw.passives : base.passives,
+    features: Array.isArray(raw.features) ? raw.features : base.features,
+    resources: { ...base.resources, ...(raw.resources ?? {}) },
     slots,
     usedSlots: Array.isArray(raw.usedSlots) ? raw.usedSlots : slots.map(() => 0),
     spells: Array.isArray(raw.spells) ? raw.spells.map(spell => ({ ...spell, uses: Number.isFinite(spell.uses) ? spell.uses : 0 })) : base.spells,
@@ -240,9 +245,13 @@ function CharacterPage({ id, characters, update, notify }: { id: string; charact
     notify(`${target.name} conjurada com espaço de ${slotIndex + 1}º círculo.`);
   };
   const shortRest = () => {
-    if (c.className !== 'Bruxo') return;
-    update(c.id, old => ({ ...old, usedSlots: old.slots.map(() => 0) }));
-    notify('Espaços de pacto recuperados no descanso curto.');
+    if (c.className !== 'Bruxo' && c.className !== 'Monge') return;
+    update(c.id, old => ({
+      ...old,
+      usedSlots: old.className === 'Bruxo' ? old.slots.map(() => 0) : old.usedSlots,
+      resources: { ...old.resources, kiPoints: resourceMaximum(old.className, old.level, 'kiPoints') },
+    }));
+    notify(c.className === 'Bruxo' ? 'Espaços de pacto recuperados no descanso curto.' : 'Pontos de Ki recuperados no descanso curto.');
   };
   const longRest = () => {
     update(c.id, old => ({
@@ -250,14 +259,41 @@ function CharacterPage({ id, characters, update, notify }: { id: string; charact
       hp: old.maxHp,
       usedSlots: old.slots.map(() => 0),
       spells: old.spells.map(spell => ({ ...spell, uses: 0 })),
+      resources: {
+        kiPoints: resourceMaximum(old.className, old.level, 'kiPoints'),
+        sorceryPoints: resourceMaximum(old.className, old.level, 'sorceryPoints'),
+      },
     }));
-    notify('PV e espaços de magia recuperados; contadores de conjuração reiniciados.');
+    notify('PV, espaços de magia e recursos recuperados; contadores de conjuração reiniciados.');
   };
+  const changeResource = (resource: 'kiPoints' | 'sorceryPoints', delta: number) => update(c.id, old => ({
+    ...old,
+    resources: {
+      ...old.resources,
+      [resource]: Math.max(0, Math.min(resourceMaximum(old.className, old.level, resource), old.resources[resource] + delta)),
+    },
+  }));
   const levelUp = () => {
     if (c.level >= 20) return;
     const nextLevel = c.level + 1;
     const nextHp = hpForLevel(c, nextLevel);
-    update(c.id, old => ({ ...old, level: nextLevel, maxHp: nextHp, hp: Math.min(nextHp, old.hp + Math.max(1, Math.floor(old.hitDie / 2) + 1 + mod(old.abilities.con))), slots: slotsFor(old.className, nextLevel) }));
+    update(c.id, old => {
+      const oldKiMax = resourceMaximum(old.className, old.level, 'kiPoints');
+      const nextKiMax = resourceMaximum(old.className, nextLevel, 'kiPoints');
+      const oldSorceryMax = resourceMaximum(old.className, old.level, 'sorceryPoints');
+      const nextSorceryMax = resourceMaximum(old.className, nextLevel, 'sorceryPoints');
+      return ({
+      ...old,
+      level: nextLevel,
+      maxHp: nextHp,
+      hp: Math.min(nextHp, old.hp + Math.max(1, Math.floor(old.hitDie / 2) + 1 + mod(old.abilities.con))),
+      slots: slotsFor(old.className, nextLevel),
+      resources: {
+        kiPoints: old.resources.kiPoints >= oldKiMax && nextKiMax > oldKiMax ? nextKiMax : Math.min(nextKiMax, old.resources.kiPoints),
+        sorceryPoints: old.resources.sorceryPoints >= oldSorceryMax && nextSorceryMax > oldSorceryMax ? nextSorceryMax : Math.min(nextSorceryMax, old.resources.sorceryPoints),
+      },
+    });
+    });
     setLeveling(false); notify(`${c.name} avançou para o nível ${nextLevel}.`);
   };
   const toggleSkill = (name: string) => update(c.id, old => ({ ...old, skills: old.skills.includes(name) ? old.skills.filter(s => s !== name) : [...old.skills, name] }));
@@ -298,8 +334,27 @@ function CharacterPage({ id, characters, update, notify }: { id: string; charact
         {showDetails && <div className="progression-details">Ao subir, o bônus de proficiência muda nos níveis 5, 9, 13 e 17. Os pontos de vida máximos usam o valor médio do dado de vida mais o modificador de Constituição por nível. Consulte a mesa para escolhas de classe e magias.</div>}
       </section>
       <section className="sheet-panel passives-panel">
-        <div className="panel-heading"><div><span className="eyebrow"><span className="eyebrow-line" /> IDENTIDADE E RECURSOS</span><h2>Características</h2></div><span className="panel-index">04 / 06</span></div>
-        <div className="passive-list">{c.passives.map((passive, index) => <article key={`${c.id}-trait-${index}`}><span>{passive.split(':')[0].split('—')[0]}</span><p>{passive}</p></article>)}</div>
+        <div className="panel-heading"><div><span className="eyebrow"><span className="eyebrow-line" /> RECURSOS E TRAÇOS DA FICHA</span><h2>Habilidades</h2></div><span className="panel-index">04 / 06</span></div>
+        <div className="feature-list">{c.features.map((feature, index) => {
+          const current = feature.resource ? c.resources[feature.resource] : undefined;
+          const maximum = feature.resource ? resourceMaximum(c.className, c.level, feature.resource) : 0;
+          const resourceName = feature.resource === 'kiPoints' ? 'Pontos de Ki' : 'Pontos de Feitiçaria';
+          return <article className="feature-card" key={`${c.id}-feature-${index}`}>
+            <div className="feature-card-heading"><span>{feature.category}</span>{feature.resource && <small>RECURSO CONTÁVEL</small>}</div>
+            <h3>{feature.name}</h3>
+            <p>{feature.description}</p>
+            {feature.resource && current !== undefined && <div className="feature-resource">
+              <div className="feature-resource-title"><span>{resourceName}</span><b>{current} <small>/ {maximum}</small></b></div>
+              <div className="feature-resource-controls">
+                <button onClick={() => changeResource(feature.resource!, -1)} disabled={current <= 0} aria-label={`Gastar 1 ponto de ${feature.resource === 'kiPoints' ? 'Ki' : 'Feitiçaria'}`} data-testid={`button-${feature.resource}-minus`}>−</button>
+                <div className="resource-pips" aria-label={`${current} de ${maximum} ${resourceName.toLowerCase()} disponíveis`}>{Array.from({ length: maximum }, (_, point) => <i key={point} className={point < current ? 'is-ready' : ''} />)}</div>
+                <button onClick={() => changeResource(feature.resource!, 1)} disabled={current >= maximum} aria-label={`Recuperar 1 ponto de ${feature.resource === 'kiPoints' ? 'Ki' : 'Feitiçaria'}`} data-testid={`button-${feature.resource}-plus`}>+</button>
+              </div>
+              {feature.resource === 'kiPoints' && <button className="feature-rest-action" onClick={shortRest} data-testid="button-ki-short-rest"><RotateCcw size={12} /> Recuperar no descanso curto</button>}
+              {feature.resource === 'sorceryPoints' && <button className="feature-rest-action" onClick={longRest} data-testid="button-sorcery-long-rest"><RotateCcw size={12} /> Recuperar no descanso longo</button>}
+            </div>}
+          </article>;
+        })}</div>
       </section>
       <section className="sheet-panel spells-panel">
         <div className="panel-heading"><div><span className="eyebrow"><span className="eyebrow-line" /> LIVRO DE CONJURAÇÕES</span><h2>Magias</h2></div><span className="panel-index">05 / 06</span></div>
@@ -311,7 +366,7 @@ function CharacterPage({ id, characters, update, notify }: { id: string; charact
               const used = slot < (c.usedSlots[index] ?? 0);
               return <button key={slot} className={`slot-pip ${used ? 'is-used' : ''}`} aria-label={`${used ? 'Recuperar' : 'Gastar'} espaço de ${index + 1}º círculo`} aria-pressed={used} onClick={() => changeSlotUse(index, used ? -1 : 1)} />;
             })}</div><b>{Math.max(0, total - (c.usedSlots[index] ?? 0))} disponíveis / {total}</b></div>)}</div> : <div className="no-slots">Sem espaços de magia disponíveis.</div>}
-            <div className="rest-actions">{c.className === 'Bruxo' && <button onClick={shortRest} data-testid="button-short-rest"><RotateCcw size={13} /> Descanso curto</button>}<button onClick={longRest} data-testid="button-long-rest"><RotateCcw size={13} /> Descanso longo</button></div>
+            <div className="rest-actions">{(c.className === 'Bruxo' || c.className === 'Monge') && <button onClick={shortRest} data-testid="button-short-rest"><RotateCcw size={13} /> Descanso curto</button>}<button onClick={longRest} data-testid="button-long-rest"><RotateCcw size={13} /> Descanso longo</button></div>
             <p className="slots-source-note">Contagem inicial conforme os espaços marcados nos PDFs. Clique nos círculos para gastar ou recuperar um espaço.</p>
           </div>
           <div className="spell-list">
