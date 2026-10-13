@@ -12,6 +12,7 @@ export type CharacterFeature = {
   category: 'Classe' | 'Subclasse' | 'Ancestralidade' | 'Antecedente';
   description: string;
   resource?: 'kiPoints' | 'sorceryPoints';
+  unlockedAt?: number;
 };
 
 export type Character = {

@@ -16,6 +16,12 @@ import {
   type Character,
   type Spell,
 } from './data/character-sheets';
+import {
+  featuresUnlockedAtLevel,
+  hasAbilityImprovement,
+  spellChoicesAtLevel,
+  spellSuggestions,
+} from './data/level-progression';
 
 const standardArray = [15, 14, 13, 12, 10, 8];
 const pointCost: Record<number, number> = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 };
@@ -195,11 +201,51 @@ function CharacterPage({ id, characters, update, notify }: { id: string; charact
   const c = characters.find(x => x.id === id);
   const [mode, setMode] = useState('Manual');
   const [leveling, setLeveling] = useState(false);
+  const [asiBonuses, setAsiBonuses] = useState<Record<Ability, number>>({ for: 0, des: 0, con: 0, int: 0, sab: 0, car: 0 });
+  const [spellSelections, setSpellSelections] = useState<Record<number, string>>({});
+  const [customSpellNames, setCustomSpellNames] = useState<Record<number, string>>({});
+  const [customSpellLevels, setCustomSpellLevels] = useState<Record<number, number>>({});
+  const [customSpellDescriptions, setCustomSpellDescriptions] = useState<Record<number, string>>({});
   const [showDetails, setShowDetails] = useState(false);
   const [hpInput, setHpInput] = useState('');
   const [expandedSpell, setExpandedSpell] = useState<string | null>(null);
   if (!c) return <NotFound />;
+  const openLevelUp = () => {
+    setAsiBonuses({ for: 0, des: 0, con: 0, int: 0, sab: 0, car: 0 });
+    setSpellSelections({});
+    setCustomSpellNames({});
+    setCustomSpellLevels({});
+    setCustomSpellDescriptions({});
+    setLeveling(true);
+  };
   const prof = profFor(c.level);
+  const nextLevel = Math.min(20, c.level + 1);
+  const needsAsi = hasAbilityImprovement(c.className, nextLevel);
+  const asiPointsUsed = Object.values(asiBonuses).reduce((sum, value) => sum + value, 0);
+  const previewAbilities = { ...c.abilities, ...Object.fromEntries(abilityKeys.map(key => [key, c.abilities[key] + asiBonuses[key]])) } as Record<Ability, number>;
+  const previewCharacter = { ...c, abilities: previewAbilities };
+  const nextMaxHp = hpForLevel(previewCharacter, nextLevel);
+  const levelSpellChoices = spellChoicesAtLevel(c, nextLevel, previewAbilities.sab);
+  const newLevelFeatures = featuresUnlockedAtLevel(c.className, c.subclass, nextLevel);
+  const resolvedLevelSpells = levelSpellChoices.map((choice, index): Spell | null => {
+    const selected = spellSelections[index];
+    if (!selected) return null;
+    if (selected === '__custom__') {
+      const name = customSpellNames[index]?.trim();
+      if (!name) return null;
+      const level = choice.kind === 'cantrip' ? 0 : customSpellLevels[index] ?? Math.min(1, choice.maxLevel);
+      return {
+        name,
+        level,
+        description: customSpellDescriptions[index]?.trim() || 'Magia escolhida ao subir de nível. Consulte o texto completo na fonte da campanha.',
+        uses: 0,
+      };
+    }
+    return spellSuggestions(c, choice).find(spell => spell.name === selected) ?? null;
+  });
+  const spellChoicesComplete = resolvedLevelSpells.every((spell): spell is Spell => Boolean(spell))
+    && new Set([...c.spells.map(spell => spell.name.toLocaleLowerCase('pt-BR')), ...resolvedLevelSpells.map(spell => spell!.name.toLocaleLowerCase('pt-BR'))]).size === c.spells.length + resolvedLevelSpells.length;
+  const canConfirmLevelUp = c.level < 20 && (!needsAsi || asiPointsUsed === 2) && spellChoicesComplete;
   const initiative = mod(c.abilities.des);
   const ac = c.armorBase + (c.armorDex ? Math.max(-1, c.armorDexCap === undefined ? mod(c.abilities.des) : Math.min(c.armorDexCap, mod(c.abilities.des))) : 0) + (c.armorWis ? mod(c.abilities.sab) : 0);
   const pointsSpent = Object.values(c.abilities).reduce((sum, v) => sum + (pointCost[v] ?? 99), 0);
@@ -273,26 +319,42 @@ function CharacterPage({ id, characters, update, notify }: { id: string; charact
       [resource]: Math.max(0, Math.min(resourceMaximum(old.className, old.level, resource), old.resources[resource] + delta)),
     },
   }));
+  const adjustAsi = (ability: Ability, delta: number) => setAsiBonuses(current => {
+    const used = Object.values(current).reduce((sum, value) => sum + value, 0);
+    const nextValue = current[ability] + delta;
+    if (nextValue < 0 || nextValue > 2) return current;
+    if (delta > 0 && used >= 2) return current;
+    if (c.abilities[ability] + nextValue > 20) return current;
+    return { ...current, [ability]: nextValue };
+  });
   const levelUp = () => {
-    if (c.level >= 20) return;
-    const nextLevel = c.level + 1;
-    const nextHp = hpForLevel(c, nextLevel);
+    if (!canConfirmLevelUp) return;
     update(c.id, old => {
+      const abilities = { ...old.abilities, ...Object.fromEntries(abilityKeys.map(key => [key, old.abilities[key] + asiBonuses[key]])) } as Record<Ability, number>;
+      const nextCharacter = { ...old, abilities };
+      const maxHp = hpForLevel(nextCharacter, nextLevel);
+      const newFeatures = featuresUnlockedAtLevel(old.className, old.subclass, nextLevel)
+        .filter(feature => !old.features.some(existing => existing.name === feature.name));
       const oldKiMax = resourceMaximum(old.className, old.level, 'kiPoints');
       const nextKiMax = resourceMaximum(old.className, nextLevel, 'kiPoints');
       const oldSorceryMax = resourceMaximum(old.className, old.level, 'sorceryPoints');
       const nextSorceryMax = resourceMaximum(old.className, nextLevel, 'sorceryPoints');
-      return ({
-      ...old,
-      level: nextLevel,
-      maxHp: nextHp,
-      hp: Math.min(nextHp, old.hp + Math.max(1, Math.floor(old.hitDie / 2) + 1 + mod(old.abilities.con))),
-      slots: slotsFor(old.className, nextLevel),
-      resources: {
-        kiPoints: old.resources.kiPoints >= oldKiMax && nextKiMax > oldKiMax ? nextKiMax : Math.min(nextKiMax, old.resources.kiPoints),
-        sorceryPoints: old.resources.sorceryPoints >= oldSorceryMax && nextSorceryMax > oldSorceryMax ? nextSorceryMax : Math.min(nextSorceryMax, old.resources.sorceryPoints),
-      },
-    });
+      const spells = [...old.spells, ...resolvedLevelSpells.filter((spell): spell is Spell => Boolean(spell))]
+        .filter((spell, index, list) => list.findIndex(candidate => candidate.name.toLocaleLowerCase('pt-BR') === spell.name.toLocaleLowerCase('pt-BR')) === index);
+      return {
+        ...old,
+        level: nextLevel,
+        abilities,
+        maxHp,
+        hp: Math.min(maxHp, old.hp + Math.max(1, maxHp - old.maxHp)),
+        slots: slotsFor(old.className, nextLevel),
+        features: [...old.features, ...newFeatures],
+        spells,
+        resources: {
+          kiPoints: old.resources.kiPoints >= oldKiMax && nextKiMax > oldKiMax ? nextKiMax : Math.min(nextKiMax, old.resources.kiPoints),
+          sorceryPoints: old.resources.sorceryPoints >= oldSorceryMax && nextSorceryMax > oldSorceryMax ? nextSorceryMax : Math.min(nextSorceryMax, old.resources.sorceryPoints),
+        },
+      };
     });
     setLeveling(false); notify(`${c.name} avançou para o nível ${nextLevel}.`);
   };
@@ -305,7 +367,7 @@ function CharacterPage({ id, characters, update, notify }: { id: string; charact
         <div className="hero-meta"><input value={c.ancestry} onChange={e => update(c.id, old => ({ ...old, ancestry: e.target.value }))} aria-label="Ancestralidade" data-testid="input-ancestry" /><span>·</span><input value={c.className} onChange={e => update(c.id, old => ({ ...old, className: e.target.value }))} aria-label="Classe" data-testid="input-class" /><span>·</span><input value={c.subclass} onChange={e => update(c.id, old => ({ ...old, subclass: e.target.value }))} aria-label="Subclasse" data-testid="input-subclass" /></div>
         <div className="sheet-origin">{c.background} · {c.alignment} · Jogador: {c.player} · Deslocamento: {c.speed}</div>
       </div>
-      <div className="level-plaque"><span>NÍVEL</span><strong>{String(c.level).padStart(2, '0')}</strong><button onClick={() => setLeveling(true)} disabled={c.level >= 20} data-testid="button-level-up"><ArrowUpRight size={14} /> SUBIR DE NÍVEL</button></div>
+      <div className="level-plaque"><span>NÍVEL</span><strong>{String(c.level).padStart(2, '0')}</strong><button onClick={openLevelUp} disabled={c.level >= 20} data-testid="button-level-up"><ArrowUpRight size={14} /> SUBIR DE NÍVEL</button></div>
     </div>
     <div className="quick-stats">
       <div className="quick-stat"><span>CLASSE DE ARMADURA</span><b><Shield size={18} /> {ac}</b><small>CA</small></div>
@@ -328,8 +390,8 @@ function CharacterPage({ id, characters, update, notify }: { id: string; charact
       </section>
       <section className="sheet-panel progression-panel">
         <div className="panel-heading"><div><span className="eyebrow"><span className="eyebrow-line" /> PRÓXIMO CAPÍTULO</span><h2>Progressão</h2></div><span className="panel-index">03 / 06</span></div>
-        <div className="progression-current"><div><span>AGORA</span><b>Nível {c.level}</b></div><ChevronRight size={17} /><div className="next-level"><span>PRÓXIMO</span><b>Nível {Math.min(20, c.level + 1)}</b></div><button onClick={() => setLeveling(true)} disabled={c.level >= 20} aria-label="Ver progressão" data-testid="button-progression"><ArrowUpRight size={16} /></button></div>
-        <div className="unlock-card"><div className="unlock-symbol"><Crown size={19} /></div><div><span>DESTAQUE DO NÍVEL {Math.min(20, c.level + 1)}</span><p>{c.level < 3 ? 'Seu caminho de classe começa a se revelar.' : c.level === 3 ? classFeature[c.className] ?? 'Novas opções de classe e aprimoramentos.' : c.level === 4 ? 'Aprimoramento de Atributo ou talento.' : 'Novas capacidades de classe e maior proficiência.'}</p></div></div>
+        <div className="progression-current"><div><span>AGORA</span><b>Nível {c.level}</b></div><ChevronRight size={17} /><div className="next-level"><span>PRÓXIMO</span><b>Nível {nextLevel}</b></div><button onClick={openLevelUp} disabled={c.level >= 20} aria-label="Ver progressão" data-testid="button-progression"><ArrowUpRight size={16} /></button></div>
+        <div className="unlock-card"><div className="unlock-symbol"><Crown size={19} /></div><div><span>DESTAQUE DO NÍVEL {nextLevel}</span><p>{needsAsi ? 'Aprimoramento de atributos disponível neste nível.' : newLevelFeatures.length ? newLevelFeatures.map(feature => feature.name).join(' · ') : c.level < 3 ? 'Seu caminho de classe começa a se revelar.' : classFeature[c.className] ?? 'Novas opções de classe e magias.'}</p></div></div>
         <button className="text-action" onClick={() => setShowDetails(v => !v)} data-testid="button-class-details"><CircleHelp size={14} /> {showDetails ? 'Ocultar detalhes' : 'Ver notas de progressão'} <ChevronDown size={14} className={showDetails ? 'rotated' : ''} /></button>
         {showDetails && <div className="progression-details">Ao subir, o bônus de proficiência muda nos níveis 5, 9, 13 e 17. Os pontos de vida máximos usam o valor médio do dado de vida mais o modificador de Constituição por nível. Consulte a mesa para escolhas de classe e magias.</div>}
       </section>
@@ -391,9 +453,58 @@ function CharacterPage({ id, characters, update, notify }: { id: string; charact
       </section>
     </div>
     {leveling && <div className="modal-backdrop" role="presentation" onClick={() => setLeveling(false)}><div className="level-modal" role="dialog" aria-modal="true" aria-labelledby="level-title" onClick={e => e.stopPropagation()}>
-      <button className="modal-close" onClick={() => setLeveling(false)} aria-label="Fechar"><X size={18} /></button><div className="modal-sigil"><Crown size={21} /></div><span className="eyebrow"><span className="eyebrow-line" /> UM NOVO CAPÍTULO</span><h2 id="level-title">Subir para o nível {c.level + 1}?</h2><p>Uma escolha de cada vez. A ficha atualiza os valores derivados para você.</p>
-      <div className="level-change-list"><div><span>PONTOS DE VIDA MÁXIMOS</span><b>{c.maxHp} <ArrowUpRight size={13} /> {hpForLevel(c, c.level + 1)}</b><small>+{Math.max(1, Math.floor(c.hitDie / 2) + 1 + mod(c.abilities.con))} PV pelo valor médio do dado de vida</small></div><div><span>BÔNUS DE PROFICIÊNCIA</span><b>{signed(prof)} <ArrowUpRight size={13} /> {signed(profFor(c.level + 1))}</b><small>{profFor(c.level + 1) > prof ? 'Seu bônus aumenta neste nível.' : 'Mantém o valor atual.'}</small></div><div><span>DESTAQUE DA CLASSE</span><p>{classFeature[c.className] ?? 'Consulte as opções de classe disponíveis para este nível.'}</p></div>{c.slots.length > 0 && <div><span>ESPAÇOS DE MAGIA</span><p>{slotsFor(c.className, c.level + 1).map((n, i) => `${i + 1}º círculo: ${n}`).join(' · ')}</p></div>}</div>
-      <div className="modal-actions"><button className="secondary-button" onClick={() => setLeveling(false)}>Ainda não</button><button className="primary-button" onClick={levelUp} data-testid="button-confirm-level-up"><Sparkles size={15} /> Avançar nível</button></div><small className="level-note">Aumentos de atributo, magias e escolhas de classe são decididos à mesa.</small>
+      <button className="modal-close" onClick={() => setLeveling(false)} aria-label="Fechar"><X size={18} /></button><div className="modal-sigil"><Crown size={21} /></div><span className="eyebrow"><span className="eyebrow-line" /> UM NOVO CAPÍTULO</span><h2 id="level-title">Subir para o nível {nextLevel}?</h2><p>Revise os ganhos e faça as escolhas desta progressão antes de atualizar a ficha.</p>
+      <div className="level-change-list">
+        <div><span>PONTOS DE VIDA MÁXIMOS</span><b>{c.maxHp} <ArrowUpRight size={13} /> {nextMaxHp}</b><small>O aumento considera o dado de vida e os ajustes de Constituição.</small></div>
+        <div><span>BÔNUS DE PROFICIÊNCIA</span><b>{signed(prof)} <ArrowUpRight size={13} /> {signed(profFor(nextLevel))}</b><small>{profFor(nextLevel) > prof ? 'Seu bônus aumenta neste nível.' : 'Mantém o valor atual.'}</small></div>
+        <div><span>DESTAQUE DA CLASSE</span><p>{classFeature[c.className] ?? 'Novas opções de classe, magias ou recursos podem ser liberados neste nível.'}</p></div>
+        {c.slots.length > 0 && <div><span>ESPAÇOS DE MAGIA</span><p>{slotsFor(c.className, nextLevel).map((n, i) => `${i + 1}º círculo: ${n}`).join(' · ')}</p></div>}
+      </div>
+
+      {needsAsi && <section className="level-up-section asi-section">
+        <div className="level-section-heading"><div><span>AVISO · NÍVEL {nextLevel}</span><h3>Aprimoramento de atributos</h3></div><b>{Math.max(0, 2 - asiPointsUsed)} <small>/ 2 pontos</small></b></div>
+        <p>Neste nível você pode distribuir +2 pontos entre atributos. Cada atributo tem limite 20; divida em +1 e +1 ou coloque os dois no mesmo.</p>
+        <div className="asi-choice-grid">{abilityKeys.map(ability => <div className="asi-choice" key={ability}>
+          <span>{abilityLabels[ability]}</span><b>{c.abilities[ability]} <ArrowUpRight size={11} /> {previewAbilities[ability]}</b>
+          <div><button onClick={() => adjustAsi(ability, -1)} disabled={asiBonuses[ability] <= 0} aria-label={`Remover ponto de ${abilityLabels[ability]}`}>−</button><small>+{asiBonuses[ability]}</small><button onClick={() => adjustAsi(ability, 1)} disabled={asiPointsUsed >= 2 || previewAbilities[ability] >= 20} aria-label={`Aumentar ${abilityLabels[ability]}`}>+</button></div>
+        </div>)}</div>
+        {asiPointsUsed < 2 && <small className="level-choice-hint">Distribua os 2 pontos para continuar.</small>}
+      </section>}
+
+      {levelSpellChoices.length > 0 && <section className="level-up-section spell-choice-section">
+        <div className="level-section-heading"><div><span>NOVA ESCOLHA</span><h3>Escolha suas magias</h3></div><b>{levelSpellChoices.length} <small>{levelSpellChoices.length === 1 ? 'escolha' : 'escolhas'}</small></b></div>
+        <p>Escolha entre as sugestões ou escreva outra magia válida para sua classe e nível. As magias selecionadas entram na ficha ao confirmar.</p>
+        {levelSpellChoices.map((choice, index) => {
+          const selected = spellSelections[index] ?? '';
+          const blockedNames = new Set(Object.entries(spellSelections).filter(([key, name]) => Number(key) !== index && name && name !== '__custom__').map(([, name]) => name));
+          const suggestions = spellSuggestions(c, choice).filter(spell => !blockedNames.has(spell.name));
+          const customLevel = customSpellLevels[index] ?? (choice.kind === 'cantrip' ? 0 : Math.min(1, choice.maxLevel));
+          return <div className="level-spell-choice" key={`${choice.kind}-${index}`}>
+            <label htmlFor={`level-spell-${index}`}>{choice.kind === 'cantrip' ? 'Novo truque' : choice.kind === 'prepared' ? 'Nova magia preparada' : choice.kind === 'magical secret' ? 'Segredo Mágico · qualquer classe' : 'Nova magia conhecida'}{choice.kind !== 'cantrip' && <small> · até {choice.maxLevel}º círculo</small>}</label>
+            <select id={`level-spell-${index}`} value={selected} onChange={event => setSpellSelections(current => ({ ...current, [index]: event.target.value }))}>
+              <option value="">Selecione uma sugestão…</option>
+              {suggestions.map(spell => <option key={spell.name} value={spell.name}>{spell.name} · {spell.level === 0 ? 'truque' : `${spell.level}º círculo`}</option>)}
+              <option value="__custom__">Escrever outra magia…</option>
+            </select>
+            {selected === '__custom__' && <div className="custom-spell-fields">
+              <input value={customSpellNames[index] ?? ''} onChange={event => setCustomSpellNames(current => ({ ...current, [index]: event.target.value }))} placeholder="Nome da magia" aria-label="Nome da magia escolhida" />
+              {choice.kind !== 'cantrip' && <select value={customLevel} onChange={event => setCustomSpellLevels(current => ({ ...current, [index]: Number(event.target.value) }))} aria-label="Círculo da magia">
+                {Array.from({ length: choice.maxLevel }, (_, circle) => circle + 1).map(circle => <option key={circle} value={circle}>{circle}º círculo</option>)}
+              </select>}
+              <input value={customSpellDescriptions[index] ?? ''} onChange={event => setCustomSpellDescriptions(current => ({ ...current, [index]: event.target.value }))} placeholder="Descrição curta (opcional)" aria-label="Descrição curta da magia" />
+            </div>}
+          </div>;
+        })}
+        {!spellChoicesComplete && <small className="level-choice-hint">Escolha uma magia diferente em cada campo para continuar.</small>}
+      </section>}
+
+      {newLevelFeatures.length > 0 && <section className="level-up-section feature-unlock-section">
+        <div className="level-section-heading"><div><span>DESBLOQUEADAS NO NÍVEL {nextLevel}</span><h3>Novas habilidades</h3></div><b>{newLevelFeatures.length}</b></div>
+        <div className="level-feature-list">{newLevelFeatures.map(feature => <article key={`${feature.category}-${feature.name}`}><span>{feature.category}</span><b>{feature.name}</b><p>{feature.description}</p></article>)}</div>
+      </section>}
+
+      <div className="modal-actions"><button className="secondary-button" onClick={() => setLeveling(false)}>Ainda não</button><button className="primary-button" onClick={levelUp} disabled={!canConfirmLevelUp} data-testid="button-confirm-level-up"><Sparkles size={15} /> Avançar nível</button></div>
+      <small className="level-note">{needsAsi ? 'O aumento de atributo é oferecido nos níveis 4, 8, 12, 16 e 19; Ladinos também no 10.' : 'Os novos recursos, espaços e magias são registrados automaticamente na ficha.'}</small>
     </div></div>}
   </div>;
 }
