@@ -5,6 +5,7 @@ export type Spell = {
   level: number;
   description: string;
   uses: number;
+  unlockedAt?: number;
 };
 
 export type CharacterFeature = {
@@ -20,6 +21,7 @@ export type Character = {
   name: string;
   className: string;
   ancestry: string;
+  subrace?: string;
   subclass: string;
   background: string;
   alignment: string;
@@ -35,6 +37,7 @@ export type Character = {
   armorDexCap?: number;
   armorWis?: boolean;
   skills: string[];
+  proficiencies?: string[];
   savingThrows: Ability[];
   features: CharacterFeature[];
   resources: { kiPoints: number; sorceryPoints: number };

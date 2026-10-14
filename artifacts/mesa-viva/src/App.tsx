@@ -3,7 +3,7 @@ import { Link, Route, Switch, useLocation } from 'wouter';
 import {
   ArrowLeft, ArrowUpRight, BookOpen, Check, ChevronDown,
   ChevronRight, CircleHelp, Crown, Dices, Download, Heart, Moon, Plus,
-  RotateCcw, Shield, Sparkles, Sun, Swords, Upload, Users, WandSparkles, X,
+  RotateCcw, Shield, Sparkles, Sun, Swords, Trash2, Upload, Users, WandSparkles, X,
 } from 'lucide-react';
 import {
   abilityAbbr,
@@ -22,6 +22,12 @@ import {
   spellChoicesAtLevel,
   spellSuggestions,
 } from './data/level-progression';
+import {
+  backgroundOptions,
+  classOptions,
+  createCharacterFromOptions,
+  raceOptions,
+} from './data/character-builder';
 
 const standardArray = [15, 14, 13, 12, 10, 8];
 const pointCost: Record<number, number> = { 8: 0, 9: 1, 10: 2, 11: 3, 12: 4, 13: 5, 14: 7, 15: 9 };
@@ -39,6 +45,26 @@ const slotsFor = (className: string, level: number): number[] => {
     const pactSlotCount = level >= 17 ? 4 : level >= 11 ? 3 : level >= 2 ? 2 : 1;
     return Array.from({ length: pactSlotLevel }, (_, index) => index + 1 === pactSlotLevel ? pactSlotCount : 0);
   }
+  if (className === 'Artífice') {
+    const artificer: Record<number, number[]> = {
+      1: [2], 2: [2], 3: [3], 4: [3], 5: [4, 2], 6: [4, 2], 7: [4, 3],
+      8: [4, 3], 9: [4, 3, 2], 10: [4, 3, 2], 11: [4, 3, 3], 12: [4, 3, 3],
+      13: [4, 3, 3, 1], 14: [4, 3, 3, 1], 15: [4, 3, 3, 2], 16: [4, 3, 3, 2],
+      17: [4, 3, 3, 3, 1], 18: [4, 3, 3, 3, 1], 19: [4, 3, 3, 3, 2], 20: [4, 3, 3, 3, 2],
+    };
+    return artificer[Math.max(1, Math.min(level, 20))] ?? [];
+  }
+  if (['Paladino', 'Patrulheiro'].includes(className)) {
+    const halfCaster: Record<number, number[]> = {
+      1: [], 2: [2], 3: [3], 4: [3], 5: [4, 2], 6: [4, 2], 7: [4, 3],
+      8: [4, 3], 9: [4, 3, 2], 10: [4, 3, 2], 11: [4, 3, 3],
+      12: [4, 3, 3], 13: [4, 3, 3, 1], 14: [4, 3, 3, 1],
+      15: [4, 3, 3, 2], 16: [4, 3, 3, 2], 17: [4, 3, 3, 3, 1],
+      18: [4, 3, 3, 3, 1], 19: [4, 3, 3, 3, 2], 20: [4, 3, 3, 3, 2],
+    };
+    return halfCaster[Math.max(1, Math.min(level, 20))] ?? [];
+  }
+  if (!['Bardo', 'Clérigo', 'Druida', 'Feiticeiro', 'Mago'].includes(className)) return [];
   const full: Record<number, number[]> = {
     1: [2], 2: [3], 3: [4, 2], 4: [4, 3], 5: [4, 3, 2],
     6: [4, 3, 3], 7: [4, 3, 3, 1], 8: [4, 3, 3, 2],
@@ -52,14 +78,6 @@ const slotsFor = (className: string, level: number): number[] => {
     20: [4, 3, 3, 3, 3, 2, 2, 1, 1],
   };
   return full[Math.max(1, Math.min(level, 20))] ?? [];
-};
-const classFeature: Record<string, string> = {
-  Ladino: 'Aprimoramento de Atributo ou talento.',
-  Feiticeiro: 'Aprimoramento de Atributo ou talento.',
-  Clérigo: 'Aprimoramento de Atributo ou talento. Acesso a magias de 2º círculo.',
-  Bruxo: 'Aprimoramento de Atributo ou talento. Acesso a invocações e magias de 2º círculo.',
-  Monge: 'Aprimoramento de Atributo ou talento. Queda Lenta reduz dano de queda com sua reação.',
-  Bardo: 'Aprimoramento de Atributo ou talento. Acesso a magias de 2º círculo.',
 };
 function loadCharacters(): Character[] {
   try {
@@ -97,6 +115,7 @@ function normalizeCharacter(value: unknown): Character {
     ...raw,
     abilities: { ...base.abilities, ...(raw.abilities ?? {}) },
     skills: Array.isArray(raw.skills) ? raw.skills : base.skills,
+    proficiencies: Array.isArray(raw.proficiencies) ? raw.proficiencies : base.proficiencies ?? [],
     savingThrows: Array.isArray(raw.savingThrows) ? raw.savingThrows : base.savingThrows,
     features: Array.isArray(raw.features) ? raw.features : base.features,
     resources: { ...base.resources, ...(raw.resources ?? {}) },
@@ -116,10 +135,15 @@ function App() {
   useEffect(() => { document.documentElement.classList.toggle('dark', dark); localStorage.setItem('mesa-viva-theme', dark ? 'dark' : 'light'); }, [dark]);
   useEffect(() => { if (!toast) return; const timer = window.setTimeout(() => setToast(''), 2600); return () => window.clearTimeout(timer); }, [toast]);
   const update = (id: string, next: (c: Character) => Character) => setCharacters(prev => prev.map(c => c.id === id ? next(c) : c));
-  const createCharacter = () => {
-    const id = `aventureiro-${Date.now().toString(36)}`;
-    const c: Character = { ...starters[0], id, name: 'Novo aventureiro', className: 'Ladino', ancestry: 'Humano', subclass: '—', level: 1, abilities: { for: 15, des: 14, con: 13, int: 12, sab: 10, car: 8 }, maxHp: 9, hp: 9, skills: [], slots: [], notes: 'Uma nova história começa aqui.' };
-    setCharacters(prev => [c, ...prev]); navigate(`/characters/${id}`); setToast('A ficha nova está pronta para ganhar forma.');
+  const createCharacter = (character: Character) => {
+    setCharacters(prev => [character, ...prev]); navigate(`/characters/${character.id}`); setToast('A nova ficha foi criada com as opções selecionadas.');
+  };
+  const deleteCharacter = (id: string) => {
+    const character = characters.find(item => item.id === id);
+    if (!character) return;
+    if (!window.confirm(`Tem certeza que deseja apagar a ficha de ${character.name}? Esta ação não pode ser desfeita.`)) return;
+    setCharacters(prev => prev.filter(item => item.id !== id));
+    setToast(`A ficha de ${character.name} foi apagada.`);
   };
   const exportData = () => {
     const blob = new Blob([JSON.stringify(characters, null, 2)], { type: 'application/json' });
@@ -150,7 +174,7 @@ function App() {
       </aside>
       <main className="main-content">
         <Switch>
-          <Route path="/">{() => <Home characters={characters} onCreate={createCharacter} />}</Route>
+          <Route path="/">{() => <Home characters={characters} onCreate={createCharacter} onDelete={deleteCharacter} />}</Route>
           <Route path="/characters/:id">{params => <CharacterPage id={params.id ?? ''} characters={characters} update={update} notify={setToast} />}</Route>
           <Route><NotFound /></Route>
         </Switch>
@@ -160,8 +184,10 @@ function App() {
   </div>;
 }
 
-function Home({ characters, onCreate }: { characters: Character[]; onCreate: () => void }) {
+function Home({ characters, onCreate, onDelete }: { characters: Character[]; onCreate: (character: Character) => void; onDelete: (id: string) => void }) {
+  const [creating, setCreating] = useState(false);
   const alive = characters.reduce((n, c) => n + (c.hp > 0 ? 1 : 0), 0);
+  const startCreating = () => setCreating(true);
   return <div className="page page-home">
     <div className="page-kicker"><span>QUARTA-FEIRA, 18 DE JUNHO</span><span className="kicker-divider" /> <span>PRÓXIMA SESSÃO · HOJE ÀS 20H</span></div>
     <section className="welcome-row"><div><div className="eyebrow"><span className="eyebrow-line" /> A MESA ESTÁ POSTA</div><h1>Quem vai<br /><em>viver a história?</em></h1><p className="welcome-copy">Suas fichas, seus números, suas histórias. Tudo no alcance de um olhar — e de uma mão com dados.</p></div>
@@ -173,28 +199,109 @@ function Home({ characters, onCreate }: { characters: Character[]; onCreate: () 
       <div className="overview-stat"><span>NÍVEL DA CAMPANHA</span><b>03</b><small>e contando</small></div>
       <div className="overview-quote">“O destino não está escrito.<br /><i>Mas a ficha ajuda.</i>”</div>
     </div>
-    <div className="section-heading"><div><span className="eyebrow"><span className="eyebrow-line" /> SEU GRUPO</span><h2>Fichas de personagem</h2></div><button className="primary-button" onClick={onCreate} data-testid="button-new-character"><Plus size={17} /> Novo personagem</button></div>
+    <div className="section-heading"><div><span className="eyebrow"><span className="eyebrow-line" /> SEU GRUPO</span><h2>Fichas de personagem</h2></div><button className="primary-button" onClick={startCreating} data-testid="button-new-character"><Plus size={17} /> Novo personagem</button></div>
     <div className="character-grid">
-      {characters.map((c, i) => <CharacterCard key={c.id} character={c} index={i} />)}
-      <button className="add-card" onClick={onCreate} data-testid="button-add-card"><span className="add-card-icon"><Plus size={22} /></span><b>Uma nova jornada?</b><small>Crie uma ficha para sua próxima aventura.</small><span className="add-card-action">CRIAR PERSONAGEM <ArrowUpRight size={14} /></span></button>
+      {characters.map((c, i) => <CharacterCard key={c.id} character={c} index={i} onDelete={onDelete} />)}
+      <button className="add-card" onClick={startCreating} data-testid="button-add-card"><span className="add-card-icon"><Plus size={22} /></span><b>Uma nova jornada?</b><small>Crie uma ficha para sua próxima aventura.</small><span className="add-card-action">CRIAR PERSONAGEM <ArrowUpRight size={14} /></span></button>
     </div>
     <footer className="home-footer"><span><Sparkles size={14} /> CADA PERSONAGEM É UM MUNDO.</span><span>MESA VIVA <b>·</b> SUA COMPANHEIRA DE MESA</span></footer>
+    {creating && <CharacterBuilderModal onCancel={() => setCreating(false)} onCreate={character => { setCreating(false); onCreate(character); }} />}
   </div>;
 }
 
-function CharacterCard({ character: c, index }: { character: Character; index: number }) {
+function CharacterCard({ character: c, index, onDelete }: { character: Character; index: number; onDelete: (id: string) => void }) {
   const prof = profFor(c.level);
   const ac = c.armorBase
     + (c.armorDex ? Math.max(-1, c.armorDexCap === undefined ? mod(c.abilities.des) : Math.min(c.armorDexCap, mod(c.abilities.des))) : 0)
     + (c.armorWis ? mod(c.abilities.sab) : 0);
-  return <Link href={`/characters/${c.id}`} className={`character-card accent-${c.color}`} style={{ animationDelay: `${index * 65}ms` }} data-testid={`card-character-${c.id}`}>
-    <div className="card-topline"><span className="class-chip">{c.className.toUpperCase()}</span><span className="card-level">NÍV. {String(c.level).padStart(2, '0')}</span></div>
-    <div className="character-monogram">{c.name.slice(0, 1).toUpperCase()}</div>
-    <h3>{c.name}</h3><p className="character-line">{c.ancestry} <span>·</span> {c.subclass}</p>
-    <div className="card-rule" />
-    <div className="card-metrics"><div className="card-hp"><Heart size={14} /><span>PV</span><b>{c.hp}</b><small>/ {c.maxHp}</small><div className="hp-track"><i style={{ width: `${Math.max(0, Math.min(100, c.hp / c.maxHp * 100))}%` }} /></div></div><div className="card-ac"><Shield size={14} /><span>CA</span><b>{ac}</b></div><div className="card-prof"><span>PROF.</span><b>{signed(prof)}</b></div></div>
-    <div className="card-bottom"><span>ABRIR FICHA</span><ArrowUpRight size={15} /></div>
-  </Link>;
+  return <article className={`character-card accent-${c.color}`} style={{ animationDelay: `${index * 65}ms` }} data-testid={`card-character-${c.id}`}>
+    <Link href={`/characters/${c.id}`} className="character-card-link">
+      <div className="card-topline"><span className="class-chip">{c.className.toUpperCase()}</span><span className="card-level">NÍV. {String(c.level).padStart(2, '0')}</span></div>
+      <div className="character-monogram">{c.name.slice(0, 1).toUpperCase()}</div>
+      <h3>{c.name}</h3><p className="character-line">{c.ancestry}{c.subrace ? ` · ${c.subrace}` : ''} <span>·</span> {c.subclass}</p>
+      <div className="card-rule" />
+      <div className="card-metrics"><div className="card-hp"><Heart size={14} /><span>PV</span><b>{c.hp}</b><small>/ {c.maxHp}</small><div className="hp-track"><i style={{ width: `${Math.max(0, Math.min(100, c.hp / c.maxHp * 100))}%` }} /></div></div><div className="card-ac"><Shield size={14} /><span>CA</span><b>{ac}</b></div><div className="card-prof"><span>PROF.</span><b>{signed(prof)}</b></div></div>
+      <div className="card-bottom"><span>ABRIR FICHA</span><ArrowUpRight size={15} /></div>
+    </Link>
+    <button className="delete-character-button" onClick={() => onDelete(c.id)} aria-label={`Apagar ficha de ${c.name}`} data-testid={`button-delete-${c.id}`}><Trash2 size={14} /> Apagar</button>
+  </article>;
+}
+
+function CharacterBuilderModal({ onCancel, onCreate }: { onCancel: () => void; onCreate: (character: Character) => void }) {
+  const [name, setName] = useState('');
+  const [className, setClassName] = useState('Ladino');
+  const [ancestry, setAncestry] = useState('Humano');
+  const [subrace, setSubrace] = useState('Padrão');
+  const [subclass, setSubclass] = useState(classOptions.find(option => option.name === 'Ladino')?.subclasses[0] ?? '');
+  const [background, setBackground] = useState('Herói do Povo');
+  const initialClassSkills = classOptions.find(option => option.name === 'Ladino')!.skillOptions
+    .filter(skill => !backgroundOptions.find(option => option.name === 'Herói do Povo')!.skills.includes(skill))
+    .slice(0, classOptions.find(option => option.name === 'Ladino')!.skillCount);
+  const [selectedClassSkills, setSelectedClassSkills] = useState(initialClassSkills);
+  const selectedClass = classOptions.find(option => option.name === className) ?? classOptions[0];
+  const selectedRace = raceOptions.find(option => option.name === ancestry) ?? raceOptions[0];
+  const selectedBackground = backgroundOptions.find(option => option.name === background) ?? backgroundOptions[0];
+  const selectedSubrace = selectedRace.variants.find(option => option.name === subrace) ?? selectedRace.variants[0];
+  const availableClassSkills = selectedClass.skillOptions.filter(skill => !selectedBackground.skills.includes(skill));
+
+  const selectClass = (value: string) => {
+    const nextClass = classOptions.find(option => option.name === value) ?? classOptions[0];
+    setClassName(nextClass.name);
+    setSubclass(nextClass.subclasses[0]);
+    const nextBackground = backgroundOptions.find(option => option.name === background) ?? backgroundOptions[0];
+    setSelectedClassSkills(nextClass.skillOptions.filter(skill => !nextBackground.skills.includes(skill)).slice(0, nextClass.skillCount));
+  };
+  const selectBackground = (value: string) => {
+    const nextBackground = backgroundOptions.find(option => option.name === value) ?? backgroundOptions[0];
+    setBackground(value);
+    const candidates = selectedClass.skillOptions.filter(skill => !nextBackground.skills.includes(skill));
+    const retained = selectedClassSkills.filter(skill => candidates.includes(skill)).slice(0, selectedClass.skillCount);
+    for (const skill of candidates) {
+      if (retained.length >= selectedClass.skillCount) break;
+      if (!retained.includes(skill)) retained.push(skill);
+    }
+    setSelectedClassSkills(retained);
+  };
+  const toggleClassSkill = (skill: string) => {
+    setSelectedClassSkills(current => current.includes(skill)
+      ? current.filter(item => item !== skill)
+      : current.length < selectedClass.skillCount ? [...current, skill] : current);
+  };
+  const create = () => {
+    const id = `aventureiro-${Date.now().toString(36)}`;
+    onCreate(createCharacterFromOptions({ name, className, ancestry, subrace, subclass, background, selectedClassSkills }, id));
+  };
+  const bonuses = abilityKeys.map(key => ({ key, value: (selectedRace.bonuses?.[key] ?? 0) + (selectedSubrace.bonuses[key] ?? 0) }))
+    .filter(item => item.value !== 0)
+    .map(item => `${signed(item.value)} ${abilityLabels[item.key]}`);
+  return <div className="modal-backdrop builder-backdrop" role="presentation" onClick={onCancel}>
+    <div className="builder-modal" role="dialog" aria-modal="true" aria-labelledby="builder-title" onClick={event => event.stopPropagation()}>
+      <button className="modal-close" onClick={onCancel} aria-label="Fechar"><X size={18} /></button>
+      <div className="modal-sigil"><Users size={20} /></div><span className="eyebrow"><span className="eyebrow-line" /> NOVA FICHA</span>
+      <h2 id="builder-title">Criar personagem</h2><p>Escolha as opções iniciais. A ficha aplica os bônus, traços e proficiências correspondentes.</p>
+      <div className="builder-fields">
+        <label className="builder-field builder-name-field">Nome do personagem<input value={name} onChange={event => setName(event.target.value)} placeholder="Ex.: Lyra das Cinzas" autoFocus /></label>
+        <div className="builder-field-grid">
+          <label className="builder-field">Raça<select value={ancestry} onChange={event => { const race = raceOptions.find(option => option.name === event.target.value) ?? raceOptions[0]; setAncestry(race.name); setSubrace(race.variants[0].name); }}>{raceOptions.map(option => <option key={option.name}>{option.name}</option>)}</select></label>
+          <label className="builder-field">Sub-raça / variante<select value={selectedSubrace.name} onChange={event => setSubrace(event.target.value)}>{selectedRace.variants.map(option => <option key={option.name}>{option.name}</option>)}</select></label>
+          <label className="builder-field">Classe<select value={className} onChange={event => selectClass(event.target.value)}>{classOptions.map(option => <option key={option.name}>{option.name}</option>)}</select></label>
+          <label className="builder-field">Subclasse<select value={subclass} onChange={event => setSubclass(event.target.value)}>{selectedClass.subclasses.map(option => <option key={option}>{option}</option>)}</select></label>
+          <label className="builder-field builder-background-field">Antecedente<select value={background} onChange={event => selectBackground(event.target.value)}>{backgroundOptions.map(option => <option key={option.name}>{option.name}</option>)}</select></label>
+        </div>
+      </div>
+      <section className="builder-skill-section">
+        <div className="level-section-heading"><div><span>PROFICIÊNCIAS INICIAIS</span><h3>Perícias de classe</h3></div><b>{selectedClass.skillCount} <small>escolhas</small></b></div>
+        <p>As perícias do antecedente já são aplicadas. Escolha {selectedClass.skillCount} perícias da classe.</p>
+        <div className="builder-skill-grid">{availableClassSkills.map(skill => <label key={skill}><input type="checkbox" checked={selectedClassSkills.includes(skill)} onChange={() => toggleClassSkill(skill)} /><span>{skill}</span></label>)}</div>
+      </section>
+      <div className="builder-summary">
+        <span>APLICADO AUTOMATICAMENTE</span>
+        <p>{selectedClass.hitDie} PV no 1º nível · testes de resistência em {selectedClass.saves.map(key => abilityLabels[key]).join(' e ')} · {selectedBackground.skills.join(' e ')} do antecedente{bonuses.length ? ` · bônus raciais: ${bonuses.join(', ')}` : ''}.</p>
+        <small>O nível inicial é 1. Traços raciais, características de classe e benefício do antecedente entram na lista de habilidades.</small>
+      </div>
+      <div className="modal-actions"><button className="secondary-button" onClick={onCancel}>Cancelar</button><button className="primary-button" onClick={create} disabled={selectedClassSkills.length !== selectedClass.skillCount} data-testid="button-create-character"><Plus size={15} /> Criar ficha</button></div>
+    </div>
+  </div>;
 }
 
 function CharacterPage({ id, characters, update, notify }: { id: string; characters: Character[]; update: (id: string, fn: (c: Character) => Character) => void; notify: (s: string) => void }) {
@@ -225,7 +332,7 @@ function CharacterPage({ id, characters, update, notify }: { id: string; charact
   const previewAbilities = { ...c.abilities, ...Object.fromEntries(abilityKeys.map(key => [key, c.abilities[key] + asiBonuses[key]])) } as Record<Ability, number>;
   const previewCharacter = { ...c, abilities: previewAbilities };
   const nextMaxHp = hpForLevel(previewCharacter, nextLevel);
-  const levelSpellChoices = spellChoicesAtLevel(c, nextLevel, previewAbilities.sab);
+  const levelSpellChoices = spellChoicesAtLevel(c, nextLevel, previewAbilities);
   const newLevelFeatures = featuresUnlockedAtLevel(c.className, c.subclass, nextLevel);
   const resolvedLevelSpells = levelSpellChoices.map((choice, index): Spell | null => {
     const selected = spellSelections[index];
@@ -239,9 +346,11 @@ function CharacterPage({ id, characters, update, notify }: { id: string; charact
         level,
         description: customSpellDescriptions[index]?.trim() || 'Magia escolhida ao subir de nível. Consulte o texto completo na fonte da campanha.',
         uses: 0,
+        unlockedAt: nextLevel,
       };
     }
-    return spellSuggestions(c, choice).find(spell => spell.name === selected) ?? null;
+    const picked = spellSuggestions(c, choice).find(spell => spell.name === selected);
+    return picked ? { ...picked, unlockedAt: nextLevel } : null;
   });
   const spellChoicesComplete = resolvedLevelSpells.every((spell): spell is Spell => Boolean(spell))
     && new Set([...c.spells.map(spell => spell.name.toLocaleLowerCase('pt-BR')), ...resolvedLevelSpells.map(spell => spell!.name.toLocaleLowerCase('pt-BR'))]).size === c.spells.length + resolvedLevelSpells.length;
@@ -364,7 +473,7 @@ function CharacterPage({ id, characters, update, notify }: { id: string; charact
     <div className="detail-hero">
       <div className="hero-copy"><div className="eyebrow"><span className="eyebrow-line" /> FICHA DE AVENTUREIRO <span className="hero-number">Nº {c.id.slice(0, 3).toUpperCase()}</span></div>
         <input className="character-name-input" value={c.name} onChange={e => update(c.id, old => ({ ...old, name: e.target.value }))} aria-label="Nome do personagem" data-testid="input-character-name" />
-        <div className="hero-meta"><input value={c.ancestry} onChange={e => update(c.id, old => ({ ...old, ancestry: e.target.value }))} aria-label="Ancestralidade" data-testid="input-ancestry" /><span>·</span><input value={c.className} onChange={e => update(c.id, old => ({ ...old, className: e.target.value }))} aria-label="Classe" data-testid="input-class" /><span>·</span><input value={c.subclass} onChange={e => update(c.id, old => ({ ...old, subclass: e.target.value }))} aria-label="Subclasse" data-testid="input-subclass" /></div>
+        <div className="hero-meta"><input value={c.ancestry} onChange={e => update(c.id, old => ({ ...old, ancestry: e.target.value }))} aria-label="Raça" data-testid="input-ancestry" />{c.subrace && <><span>·</span><input value={c.subrace} onChange={e => update(c.id, old => ({ ...old, subrace: e.target.value }))} aria-label="Sub-raça" data-testid="input-subrace" /></>}<span>·</span><input value={c.className} onChange={e => update(c.id, old => ({ ...old, className: e.target.value }))} aria-label="Classe" data-testid="input-class" /><span>·</span><input value={c.subclass} onChange={e => update(c.id, old => ({ ...old, subclass: e.target.value }))} aria-label="Subclasse" data-testid="input-subclass" /></div>
         <div className="sheet-origin">{c.background} · {c.alignment} · Jogador: {c.player} · Deslocamento: {c.speed}</div>
       </div>
       <div className="level-plaque"><span>NÍVEL</span><strong>{String(c.level).padStart(2, '0')}</strong><button onClick={openLevelUp} disabled={c.level >= 20} data-testid="button-level-up"><ArrowUpRight size={14} /> SUBIR DE NÍVEL</button></div>
@@ -387,11 +496,12 @@ function CharacterPage({ id, characters, update, notify }: { id: string; charact
         <div className="panel-heading"><div><span className="eyebrow"><span className="eyebrow-line" /> TREINO E TALENTO</span><h2>Perícias</h2></div><span className="panel-index">02 / 06</span></div>
         <p className="panel-intro">Marque as perícias em que {c.name} tem proficiência.</p>
         <div className="skills-list">{skillList.map(skill => { const proficient = c.skills.includes(skill.name); const bonus = mod(c.abilities[skill.ability]) + (proficient ? prof : 0); return <button key={skill.name} className={`skill-row ${proficient ? 'is-proficient' : ''}`} onClick={() => toggleSkill(skill.name)} data-testid={`skill-${skill.name.toLowerCase().replaceAll(' ', '-')}`}><span className="skill-check">{proficient && <Check size={12} />}</span><span className="skill-name">{skill.name}</span><span className="skill-ability">{abilityAbbr[skill.ability]}</span><b>{signed(bonus)}</b></button>; })}</div>
+        {c.proficiencies?.length ? <div className="other-proficiencies"><span>ARMADURAS, ARMAS, FERRAMENTAS E IDIOMAS</span><p>{c.proficiencies.join(' · ')}</p></div> : null}
       </section>
       <section className="sheet-panel progression-panel">
         <div className="panel-heading"><div><span className="eyebrow"><span className="eyebrow-line" /> PRÓXIMO CAPÍTULO</span><h2>Progressão</h2></div><span className="panel-index">03 / 06</span></div>
         <div className="progression-current"><div><span>AGORA</span><b>Nível {c.level}</b></div><ChevronRight size={17} /><div className="next-level"><span>PRÓXIMO</span><b>Nível {nextLevel}</b></div><button onClick={openLevelUp} disabled={c.level >= 20} aria-label="Ver progressão" data-testid="button-progression"><ArrowUpRight size={16} /></button></div>
-        <div className="unlock-card"><div className="unlock-symbol"><Crown size={19} /></div><div><span>DESTAQUE DO NÍVEL {nextLevel}</span><p>{needsAsi ? 'Aprimoramento de atributos disponível neste nível.' : newLevelFeatures.length ? newLevelFeatures.map(feature => feature.name).join(' · ') : c.level < 3 ? 'Seu caminho de classe começa a se revelar.' : classFeature[c.className] ?? 'Novas opções de classe e magias.'}</p></div></div>
+        <div className="unlock-card"><div className="unlock-symbol"><Crown size={19} /></div><div><span>DESTAQUE DO NÍVEL {nextLevel}</span><p>{needsAsi ? 'Aprimoramento de atributos disponível neste nível.' : newLevelFeatures.length ? newLevelFeatures.map(feature => feature.name).join(' · ') : 'Confira no avanço de nível se há novas magias ou opções da campanha.'}</p></div></div>
         <button className="text-action" onClick={() => setShowDetails(v => !v)} data-testid="button-class-details"><CircleHelp size={14} /> {showDetails ? 'Ocultar detalhes' : 'Ver notas de progressão'} <ChevronDown size={14} className={showDetails ? 'rotated' : ''} /></button>
         {showDetails && <div className="progression-details">Ao subir, o bônus de proficiência muda nos níveis 5, 9, 13 e 17. Os pontos de vida máximos usam o valor médio do dado de vida mais o modificador de Constituição por nível. Consulte a mesa para escolhas de classe e magias.</div>}
       </section>
@@ -402,7 +512,7 @@ function CharacterPage({ id, characters, update, notify }: { id: string; charact
           const maximum = feature.resource ? resourceMaximum(c.className, c.level, feature.resource) : 0;
           const resourceName = feature.resource === 'kiPoints' ? 'Pontos de Ki' : 'Pontos de Feitiçaria';
           return <article className="feature-card" key={`${c.id}-feature-${index}`}>
-            <div className="feature-card-heading"><span>{feature.category}</span>{feature.resource && <small>RECURSO CONTÁVEL</small>}</div>
+            <div className="feature-card-heading"><span>{feature.category}</span>{(feature.unlockedAt || feature.resource) && <small>{feature.unlockedAt ? `NÍVEL ${feature.unlockedAt}` : ''}{feature.resource ? `${feature.unlockedAt ? ' · ' : ''}RECURSO CONTÁVEL` : ''}</small>}</div>
             <h3>{feature.name}</h3>
             <p>{feature.description}</p>
             {feature.resource && current !== undefined && <div className="feature-resource">
@@ -435,7 +545,7 @@ function CharacterPage({ id, characters, update, notify }: { id: string; charact
             {c.spells.map((spell, index) => <article className="spell-card" key={`${spell.name}-${index}`}>
               <div className="spell-card-top">
                 <button className="spell-name-button" onClick={() => setExpandedSpell(expandedSpell === spell.name ? null : spell.name)} aria-expanded={expandedSpell === spell.name} data-testid={`button-spell-${index}`}>
-                  <span><b>{spell.name}</b><small>{spell.level === 0 ? 'TRUQUE' : `${spell.level}º CÍRCULO`}</small></span><ChevronDown size={15} className={expandedSpell === spell.name ? 'rotated' : ''} />
+                  <span><b>{spell.name}</b><small>{spell.level === 0 ? 'TRUQUE' : `${spell.level}º CÍRCULO`}{spell.unlockedAt ? ` · NÍVEL ${spell.unlockedAt}` : ''}</small></span><ChevronDown size={15} className={expandedSpell === spell.name ? 'rotated' : ''} />
                 </button>
                 <span className="spell-casts">{spell.uses} conjurações</span>
                 <button className="cast-button" onClick={() => castSpell(spell)} data-testid={`button-cast-spell-${index}`}><Sparkles size={13} /> Conjurar</button>
@@ -457,7 +567,7 @@ function CharacterPage({ id, characters, update, notify }: { id: string; charact
       <div className="level-change-list">
         <div><span>PONTOS DE VIDA MÁXIMOS</span><b>{c.maxHp} <ArrowUpRight size={13} /> {nextMaxHp}</b><small>O aumento considera o dado de vida e os ajustes de Constituição.</small></div>
         <div><span>BÔNUS DE PROFICIÊNCIA</span><b>{signed(prof)} <ArrowUpRight size={13} /> {signed(profFor(nextLevel))}</b><small>{profFor(nextLevel) > prof ? 'Seu bônus aumenta neste nível.' : 'Mantém o valor atual.'}</small></div>
-        <div><span>DESTAQUE DA CLASSE</span><p>{classFeature[c.className] ?? 'Novas opções de classe, magias ou recursos podem ser liberados neste nível.'}</p></div>
+        <div><span>DESTAQUE DA CLASSE</span><p>{newLevelFeatures.length ? newLevelFeatures.map(feature => feature.name).join(' · ') : needsAsi ? 'Aprimoramento de atributos disponível neste nível.' : 'Confira as magias e opções da campanha disponíveis neste nível.'}</p></div>
         {c.slots.length > 0 && <div><span>ESPAÇOS DE MAGIA</span><p>{slotsFor(c.className, nextLevel).map((n, i) => `${i + 1}º círculo: ${n}`).join(' · ')}</p></div>}
       </div>
 
@@ -493,6 +603,7 @@ function CharacterPage({ id, characters, update, notify }: { id: string; charact
               </select>}
               <input value={customSpellDescriptions[index] ?? ''} onChange={event => setCustomSpellDescriptions(current => ({ ...current, [index]: event.target.value }))} placeholder="Descrição curta (opcional)" aria-label="Descrição curta da magia" />
             </div>}
+            {resolvedLevelSpells[index] && <p className="level-choice-description">{resolvedLevelSpells[index].description}</p>}
           </div>;
         })}
         {!spellChoicesComplete && <small className="level-choice-hint">Escolha uma magia diferente em cada campo para continuar.</small>}

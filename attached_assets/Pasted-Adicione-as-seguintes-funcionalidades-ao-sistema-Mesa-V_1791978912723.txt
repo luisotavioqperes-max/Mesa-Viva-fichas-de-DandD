@@ -1,0 +1,35 @@
+Adicione as seguintes funcionalidades ao sistema Mesa Viva:
+
+### 1. Sistema de Apagar Ficha
+- Em cada ficha na lista de personagens, adicione um botão “Apagar”.
+- Ao clicar, mostre uma confirmação clara:
+  “Tem certeza que deseja apagar a ficha de [Nome do Personagem]? Esta ação não pode ser desfeita.”
+- Só apague a ficha após a confirmação do usuário.
+- Após apagar, atualize a lista de personagens imediatamente.
+
+### 2. Criação de Personagem Completa (com todas as opções)
+
+No fluxo de criação de personagem, permita que o usuário escolha:
+
+**Raças e Sub-raças:**
+Liste todas as raças e sub-raças oficiais de D&D 5e para o usuário selecionar (Humano, Elfo e sub-raças, Anão e sub-raças, Halfling e sub-raças, Dragonborn, Gnomo e sub-raças, Meio-Elfo, Meio-Orc, Tiefling, Aasimar e suas variantes, Tabaxi, e outras raças comuns).
+
+**Classes e Subclasses:**
+Liste todas as classes oficiais e suas principais subclasses para escolha (Bárbaro, Bardo, Bruxo, Clérigo + Domínios, Druida, Guerreiro, Ladino, Mago, Monge, Paladino, Patrulheiro e Feiticeiro, incluindo subclasses como Alma Laminada, Magia Selvagem, Domínio do Crepúsculo, Lâmina Maldita, Mestre Embriagado, Colégio da Criação, etc.).
+
+**Antecedentes:**
+Permita a escolha de todos os antecedentes oficiais do Livro do Jogador e suplementos comuns.
+
+Ao selecionar raça, sub-raça, classe, subclasse e antecedente, o sistema deve aplicar automaticamente os bônus, traços, proficiências e características correspondentes.
+
+### 3. Progressão por Nível com Habilidades e Magias
+
+Quando o personagem subir de nível, o sistema deve:
+
+- Mostrar de forma clara e organizada as **novas habilidades da classe** daquele nível.
+- Mostrar as **novas habilidades da subclasse** daquele nível.
+- Mostrar as **novas magias** disponíveis (se for conjurador).
+- Exibir o efeito completo de cada habilidade e magia desbloqueada.
+- Organizar essas informações de forma parecida com as fichas existentes (separando Raça / Classe / Subclasse / Magias).
+
+A ficha deve deixar evidente o que foi liberado em cada nível.
